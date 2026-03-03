@@ -3,3 +3,4 @@ crewai
 langchain-groq
 langchain-community
 duckduckgo-search
+
