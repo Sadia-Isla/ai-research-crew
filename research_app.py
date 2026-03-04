@@ -3,14 +3,13 @@ import os
 from crewai import Agent, Task, Crew, Process
 from langchain_groq import ChatGroq
 from duckduckgo_search import DDGS 
-from langchain_core.tools import tool # <--- Updated Path
+from langchain_core.tools import Tool # Fix for the Pydantic error
 
 # --- Page Config ---
 st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", layout="wide")
 
-# --- Custom Search Tool (Fixes the ddgs Error) ---
-@tool("internet_search")
-def internet_search(query: str):
+# --- Custom Search Tool Logic (Direct DDGS Fix) ---
+def search_logic(query: str):
     """Search the internet for the latest information on a given topic."""
     try:
         with DDGS() as ddgs:
@@ -18,6 +17,13 @@ def internet_search(query: str):
             return str(results)
     except Exception as e:
         return f"Search failed: {str(e)}"
+
+# Define the tool in the format CrewAI / Pydantic expects
+internet_search_tool = Tool(
+    name="internet_search",
+    description="Search the internet for the latest information on a given topic.",
+    func=search_logic
+)
 
 # --- Sidebar: Configuration ---
 with st.sidebar:
@@ -36,7 +42,7 @@ This system uses a **Collaborative AI Crew** to research the web and write profe
 """)
 
 # --- Input Area ---
-topic = st.text_input("Research Topic", placeholder="e.g., Future of AI in Cybersecurity 2025")
+topic = st.text_input("Research Topic", placeholder="e.g., Advancements in Renewable Energy 2026")
 
 if st.button("Start Research Pipeline", type="primary"):
     if not groq_key:
@@ -53,7 +59,7 @@ if st.button("Start Research Pipeline", type="primary"):
                 role='Senior Research Analyst',
                 goal=f'Find the 3 most important developments regarding {topic}',
                 backstory="Expert at deep-web research and fact verification.",
-                tools=[internet_search],  # Using our custom tool
+                tools=[internet_search_tool],  # Fixed Tool Object
                 llm=llm,
                 verbose=True,
                 allow_delegation=False
@@ -91,7 +97,8 @@ if st.button("Start Research Pipeline", type="primary"):
             # 5. Execution UI
             with st.status("🚀 Agents are collaborating...", expanded=True) as status:
                 st.write("🔍 Researcher is scanning live data...")
-                result = str(crew.kickoff()) # Convert result to string
+                # Ensure the result is converted to string for display
+                result = str(crew.kickoff()) 
                 status.update(label="✅ Success!", state="complete", expanded=False)
 
             # 6. Display Result
