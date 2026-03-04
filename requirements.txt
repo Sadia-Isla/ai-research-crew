@@ -1,9 +1,9 @@
 streamlit
-crewai
+crewai>=0.100.0
 langchain-groq
-langchain-core
 langchain-community
 duckduckgo-search>=6.3.0
+
 
 
 
