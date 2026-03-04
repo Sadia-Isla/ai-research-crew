@@ -2,8 +2,8 @@ import streamlit as st
 import os
 from crewai import Agent, Task, Crew, Process
 from langchain_groq import ChatGroq
-from duckduckgo_search import DDGS  # Direct import to fix the error
-from langchain.tools import tool
+from duckduckgo_search import DDGS 
+from langchain_core.tools import tool # <--- Updated Path
 
 # --- Page Config ---
 st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", layout="wide")
