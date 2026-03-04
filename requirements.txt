@@ -2,7 +2,8 @@ streamlit
 crewai
 langchain-groq
 langchain-community
-duckduckgo-search>=6.2.11
+duckduckgo-search>=6.3.0
+
 
 
 
