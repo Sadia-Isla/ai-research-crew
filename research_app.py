@@ -1,29 +1,31 @@
 import streamlit as st
 import os
+import sys
+import io
 from crewai import Agent, Task, Crew, Process
+from crewai.tools import BaseTool  # Crucial fix for Pydantic error
 from langchain_groq import ChatGroq
 from duckduckgo_search import DDGS 
-from langchain_core.tools import Tool # Fix for the Pydantic error
 
 # --- Page Config ---
 st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", layout="wide")
 
-# --- Custom Search Tool Logic (Direct DDGS Fix) ---
-def search_logic(query: str):
-    """Search the internet for the latest information on a given topic."""
-    try:
-        with DDGS() as ddgs:
-            results = [r for r in ddgs.text(query, max_results=5)]
-            return str(results)
-    except Exception as e:
-        return f"Search failed: {str(e)}"
+# --- Fixed Search Tool (Inheriting from BaseTool) ---
+class InternetSearchTool(BaseTool):
+    name: str = "internet_search"
+    description: str = "Search the internet for the latest information on a given topic."
 
-# Define the tool in the format CrewAI / Pydantic expects
-internet_search_tool = Tool(
-    name="internet_search",
-    description="Search the internet for the latest information on a given topic.",
-    func=search_logic
-)
+    def _run(self, query: str) -> str:
+        """Execute the search logic."""
+        try:
+            with DDGS() as ddgs:
+                results = [r for r in ddgs.text(query, max_results=5)]
+                return str(results)
+        except Exception as e:
+            return f"Search failed: {str(e)}"
+
+# Instantiate the tool
+search_tool = InternetSearchTool()
 
 # --- Sidebar: Configuration ---
 with st.sidebar:
@@ -42,7 +44,7 @@ This system uses a **Collaborative AI Crew** to research the web and write profe
 """)
 
 # --- Input Area ---
-topic = st.text_input("Research Topic", placeholder="e.g., Advancements in Renewable Energy 2026")
+topic = st.text_input("Research Topic", placeholder="e.g., Future of Green Hydrogen 2026")
 
 if st.button("Start Research Pipeline", type="primary"):
     if not groq_key:
@@ -59,7 +61,7 @@ if st.button("Start Research Pipeline", type="primary"):
                 role='Senior Research Analyst',
                 goal=f'Find the 3 most important developments regarding {topic}',
                 backstory="Expert at deep-web research and fact verification.",
-                tools=[internet_search_tool],  # Fixed Tool Object
+                tools=[search_tool],  # Now a valid BaseTool instance
                 llm=llm,
                 verbose=True,
                 allow_delegation=False
@@ -97,7 +99,6 @@ if st.button("Start Research Pipeline", type="primary"):
             # 5. Execution UI
             with st.status("🚀 Agents are collaborating...", expanded=True) as status:
                 st.write("🔍 Researcher is scanning live data...")
-                # Ensure the result is converted to string for display
                 result = str(crew.kickoff()) 
                 status.update(label="✅ Success!", state="complete", expanded=False)
 
