@@ -3,10 +3,4 @@ crewai>=0.100.0
 langchain-groq
 langchain-community
 duckduckgo-search>=6.3.0
-
-
-
-
-
-
-
+sentence-transformers
