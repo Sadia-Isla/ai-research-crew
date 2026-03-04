@@ -2,21 +2,25 @@ import streamlit as st
 import os
 import sys
 import io
+import re
 from crewai import Agent, Task, Crew, Process
-from crewai.tools import BaseTool  # Crucial fix for Pydantic error
+from crewai.tools import BaseTool
 from langchain_groq import ChatGroq
 from duckduckgo_search import DDGS 
 
 # --- Page Config ---
 st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", layout="wide")
 
-# --- Fixed Search Tool (Inheriting from BaseTool) ---
+# --- Step 1: Fix OpenAI Requirement ---
+os.environ["OPENAI_API_KEY"] = "NA"
+
+# --- Step 2: Custom Search Tool (Pydantic v2 Compatible) ---
 class InternetSearchTool(BaseTool):
     name: str = "internet_search"
     description: str = "Search the internet for the latest information on a given topic."
 
     def _run(self, query: str) -> str:
-        """Execute the search logic."""
+        """Execute the search logic using DuckDuckGo."""
         try:
             with DDGS() as ddgs:
                 results = [r for r in ddgs.text(query, max_results=5)]
@@ -24,8 +28,19 @@ class InternetSearchTool(BaseTool):
         except Exception as e:
             return f"Search failed: {str(e)}"
 
-# Instantiate the tool
 search_tool = InternetSearchTool()
+
+# --- Helper: Capture Agent Thoughts ---
+class TerminalCapture(list):
+    def __enter__(self):
+        self._stdout = sys.stdout
+        sys.stdout = self._stringio = io.StringIO()
+        return self
+
+    def __exit__(self, *args):
+        self.extend(self._stringio.getvalue().splitlines())
+        del self._stringio
+        sys.stdout = self._stdout
 
 # --- Sidebar: Configuration ---
 with st.sidebar:
@@ -33,37 +48,37 @@ with st.sidebar:
     groq_key = st.text_input("Enter Groq API Key", type="password")
     st.info("Get your free key at [console.groq.com](https://console.groq.com)")
     st.markdown("---")
-    if st.button("Clear Chat History", use_container_width=True):
+    if st.button("Reset Session", use_container_width=True):
         st.rerun()
 
 st.title("🕵️‍♂️ Multi-Agent Research System")
 st.markdown("""
-This system uses a **Collaborative AI Crew** to research the web and write professional reports.
-- **Researcher:** Scans the live web for the latest facts.
-- **Writer:** Structures facts into a polished Markdown report.
+An autonomous **AI Pipeline** where specialized agents collaborate in real-time.
+- **Researcher:** Browses the live web for factual data.
+- **Writer:** Synthesizes data into an executive Markdown report.
 """)
 
 # --- Input Area ---
-topic = st.text_input("Research Topic", placeholder="e.g., Future of Green Hydrogen 2026")
+topic = st.text_input("Research Topic", placeholder="e.g., Future of Fusion Energy 2026")
 
 if st.button("Start Research Pipeline", type="primary"):
     if not groq_key:
-        st.error("Please provide a Groq API Key in the sidebar!")
+        st.error("Please provide a Groq API Key!")
     elif not topic:
-        st.warning("Please enter a research topic.")
+        st.warning("Please enter a topic.")
     else:
         try:
-            # 1. Setup LLM
+            # 3. Initialize LLM (Groq)
             llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
 
-            # 2. Define Agents
+            # 4. Define Agents
             researcher = Agent(
                 role='Senior Research Analyst',
                 goal=f'Find the 3 most important developments regarding {topic}',
                 backstory="Expert at deep-web research and fact verification.",
-                tools=[search_tool],  # Now a valid BaseTool instance
+                tools=[search_tool],
                 llm=llm,
-                verbose=True,
+                verbose=True, # Enable logging
                 allow_delegation=False
             )
 
@@ -72,13 +87,13 @@ if st.button("Start Research Pipeline", type="primary"):
                 goal=f'Write an executive summary based on the research provided for {topic}',
                 backstory="Specialist in technical writing and executive summaries.",
                 llm=llm,
-                verbose=True,
+                verbose=True, # Enable logging
                 allow_delegation=False
             )
 
-            # 3. Define Tasks
+            # 5. Define Tasks
             research_task = Task(
-                description=f"Search the internet and identify 3 key trends or breakthroughs in {topic}.",
+                description=f"Search the internet and identify 3 key trends in {topic}.",
                 expected_output="A list of 3 detailed bullet points with facts.",
                 agent=researcher
             )
@@ -89,27 +104,36 @@ if st.button("Start Research Pipeline", type="primary"):
                 agent=writer
             )
 
-            # 4. Assemble the Crew
+            # 6. Assemble the Crew
             crew = Crew(
                 agents=[researcher, writer],
                 tasks=[research_task, write_task],
-                process=Process.sequential
+                process=Process.sequential,
+                manager_llm=llm
             )
 
-            # 5. Execution UI
+            # 7. Execution UI with Live Logs
+            st.subheader("🧠 Agent Thought Process")
+            log_container = st.empty() # Placeholder for live logs
+            
             with st.status("🚀 Agents are collaborating...", expanded=True) as status:
-                st.write("🔍 Researcher is scanning live data...")
-                result = str(crew.kickoff()) 
+                # Capture the "Internal Monologue" of the agents
+                with TerminalCapture() as logs:
+                    result = crew.kickoff()
+                
+                # Clean and display logs to show the "Writer" actually worked
+                clean_logs = "\n".join([line for line in logs if "Working on" in line or "Action" in line])
+                log_container.code(clean_logs if clean_logs else "Pipeline execution successful.")
                 status.update(label="✅ Success!", state="complete", expanded=False)
 
-            # 6. Display Result
+            # 8. Display Result
             st.subheader("📝 Final Research Report")
-            st.markdown(result)
+            st.markdown(str(result))
             
-            # 7. Download Feature
+            # 9. Download Feature
             st.download_button(
                 label="📥 Download Report (.txt)",
-                data=result,
+                data=str(result),
                 file_name=f"research_report.txt",
                 mime="text/plain"
             )
@@ -119,4 +143,4 @@ if st.button("Start Research Pipeline", type="primary"):
 
 # --- Footer ---
 st.markdown("---")
-st.caption("Built with CrewAI, Groq (Llama 3.3), and Streamlit.")
+st.caption("Built with CrewAI, Groq, and Streamlit.")
