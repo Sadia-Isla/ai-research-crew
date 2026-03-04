@@ -1,7 +1,5 @@
 import streamlit as st
 import os
-import sys
-import io
 from crewai import Agent, Task, Crew, Process
 from crewai.tools import BaseTool
 from langchain_groq import ChatGroq
@@ -10,11 +8,12 @@ from duckduckgo_search import DDGS
 # --- Page Config ---
 st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", layout="wide")
 
-# --- Step 1: Ensure no OpenAI environment variable exists ---
-if "OPENAI_API_KEY" in os.environ:
-    del os.environ["OPENAI_API_KEY"]
+# --- THE FIX: Completely wipe any OpenAI traces from the environment ---
+os.environ["OPENAI_API_KEY"] = "sk-placeholder" # Placeholder to stop the 'missing' error
+# We tell CrewAI to use a "fake" embedder so it doesn't call OpenAI servers
+os.environ["CREWAI_SKIP_OPENAI_CHECK"] = "true" 
 
-# --- Step 2: Custom Search Tool ---
+# --- Step 1: Define Custom Search Tool ---
 class InternetSearchTool(BaseTool):
     name: str = "internet_search"
     description: str = "Search the internet for the latest information on a given topic."
@@ -29,19 +28,18 @@ class InternetSearchTool(BaseTool):
 
 search_tool = InternetSearchTool()
 
-# --- Sidebar: Configuration ---
+# --- Sidebar ---
 with st.sidebar:
     st.title("🔑 Configuration")
     groq_key = st.text_input("Enter Groq API Key", type="password")
     st.info("Get your free key at [console.groq.com](https://console.groq.com)")
     st.markdown("---")
-    if st.button("Reset Session", use_container_width=True):
+    if st.button("Reset Session"):
         st.rerun()
 
 st.title("🕵️‍♂️ Multi-Agent Research System")
-st.markdown("Autonomous research pipeline powered by **Groq**.")
+st.markdown("Autonomous research pipeline powered by **Groq & Llama 3.3**.")
 
-# --- Input Area ---
 topic = st.text_input("Research Topic", placeholder="e.g., Future of Fusion Energy 2026")
 
 if st.button("Start Research Pipeline", type="primary"):
@@ -51,11 +49,10 @@ if st.button("Start Research Pipeline", type="primary"):
         st.warning("Please enter a topic.")
     else:
         try:
-            # 3. Initialize LLM
+            # 2. Initialize Groq LLM
             llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
 
-            # 4. Define Agents 
-            # Note: We specify the llm for each agent explicitly
+            # 3. Define Agents (Explicitly assign LLM)
             researcher = Agent(
                 role='Senior Research Analyst',
                 goal=f'Find the 3 most important developments regarding {topic}',
@@ -75,7 +72,7 @@ if st.button("Start Research Pipeline", type="primary"):
                 allow_delegation=False
             )
 
-            # 5. Define Tasks
+            # 4. Define Tasks
             research_task = Task(
                 description=f"Search the internet and identify 3 key trends in {topic}.",
                 expected_output="A list of 3 detailed bullet points with facts.",
@@ -88,27 +85,24 @@ if st.button("Start Research Pipeline", type="primary"):
                 agent=writer
             )
 
-            # 6. Assemble the Crew 
-            # manager_llm=llm and embedder configuration stops OpenAI calls
+            # 5. THE ULTIMATE FIX: Assemble the Crew with Embedder Disabled
             crew = Crew(
                 agents=[researcher, writer],
                 tasks=[research_task, write_task],
                 process=Process.sequential,
                 manager_llm=llm,
-                # This tells CrewAI not to use the default OpenAI embedder
-                embedder={
-                    "provider": "google",
-                    "config": {"model": "models/embedding-001", "task_type": "retrieval_document"}
-                } if False else None # Setting to None is safest for pure Groq
+                verbose=True,
+                # Explicitly setting embedder=None prevents OpenAI calls
+                embedder=None 
             )
 
-            # 7. Execution UI
+            # 6. Execution UI
             with st.status("🚀 Agents are collaborating...", expanded=True) as status:
                 st.write("🔍 Researching and Writing...")
                 result = crew.kickoff()
                 status.update(label="✅ Success!", state="complete", expanded=False)
 
-            # 8. Display Result
+            # 7. Display Result
             st.subheader("📝 Final Research Report")
             st.markdown(str(result))
             
@@ -121,9 +115,6 @@ if st.button("Start Research Pipeline", type="primary"):
 
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
-            if "OPENAI_API_KEY" in str(e):
-                st.info("💡 Pro Tip: CrewAI is trying to find an OpenAI key. Ensure the 'Crew' object has 'manager_llm' set.")
 
-# --- Footer ---
 st.markdown("---")
 st.caption("Built with CrewAI, Groq, and Streamlit.")
