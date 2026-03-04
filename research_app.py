@@ -8,11 +8,6 @@ from duckduckgo_search import DDGS
 # --- Page Config ---
 st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", layout="wide")
 
-# --- THE FIX: Completely wipe any OpenAI traces from the environment ---
-os.environ["OPENAI_API_KEY"] = "sk-placeholder" # Placeholder to stop the 'missing' error
-# We tell CrewAI to use a "fake" embedder so it doesn't call OpenAI servers
-os.environ["CREWAI_SKIP_OPENAI_CHECK"] = "true" 
-
 # --- Step 1: Define Custom Search Tool ---
 class InternetSearchTool(BaseTool):
     name: str = "internet_search"
@@ -52,7 +47,7 @@ if st.button("Start Research Pipeline", type="primary"):
             # 2. Initialize Groq LLM
             llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
 
-            # 3. Define Agents (Explicitly assign LLM)
+            # 3. Define Agents
             researcher = Agent(
                 role='Senior Research Analyst',
                 goal=f'Find the 3 most important developments regarding {topic}',
@@ -85,15 +80,20 @@ if st.button("Start Research Pipeline", type="primary"):
                 agent=writer
             )
 
-            # 5. THE ULTIMATE FIX: Assemble the Crew with Embedder Disabled
+            # 5. THE ULTIMATE FIX: Explicitly set embedder to Hugging Face
+            # This prevents any calls or validations to OpenAI servers.
             crew = Crew(
                 agents=[researcher, writer],
                 tasks=[research_task, write_task],
                 process=Process.sequential,
                 manager_llm=llm,
                 verbose=True,
-                # Explicitly setting embedder=None prevents OpenAI calls
-                embedder=None 
+                embedder={
+                    "provider": "huggingface",
+                    "config": {
+                        "model": "sentence-transformers/all-MiniLM-L6-v2"
+                    }
+                }
             )
 
             # 6. Execution UI
