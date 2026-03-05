@@ -1,91 +1,67 @@
 import streamlit as st
-from crewai import Agent, Task, Crew, Process
-from crewai.tools import BaseTool
-from langchain_groq import ChatGroq
+import os
+from crewai import Agent, Task, Crew, Process, LLM
 from duckduckgo_search import DDGS 
 
-# --- Page Config ---
-st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️")
+# 1. COMPLETELY WIPE the OpenAI key from the environment
+if "OPENAI_API_KEY" in os.environ:
+    del os.environ["OPENAI_API_KEY"]
 
-# --- Sidebar ---
+st.set_page_config(page_title="Simplified Research", page_icon="🕵️‍♂️")
+
 with st.sidebar:
     st.title("🔑 Configuration")
     groq_key = st.text_input("Enter Groq API Key", type="password")
-    st.info("Using Llama 3.3. Memory is disabled to prevent OpenAI errors.")
 
-# --- Custom Search Tool ---
-class InternetSearchTool(BaseTool):
-    name: str = "internet_search"
-    description: str = "Search the internet for information."
-    def _run(self, query: str) -> str:
-        try:
-            with DDGS() as ddgs:
-                return str([r for r in ddgs.text(query, max_results=5)])
-        except Exception as e:
-            return f"Search failed: {str(e)}"
+# Custom Search Tool
+class InternetSearchTool:
+    def search(self, query: str):
+        with DDGS() as ddgs:
+            return str([r for r in ddgs.text(query, max_results=3)])
 
-search_tool = InternetSearchTool()
+st.title("🕵️‍♂️ Fast Research System")
+topic = st.text_input("Topic", placeholder="e.g. Llama 4 release date")
 
-st.title("🕵️‍♂️ Simple Research System")
-topic = st.text_input("Research Topic", placeholder="e.g., Quantum Computing Trends")
-
-if st.button("Start Research", type="primary"):
+if st.button("Run Research", type="primary"):
     if not groq_key:
-        st.error("Please provide your Groq API Key!")
-    elif not topic:
-        st.warning("Please enter a topic.")
+        st.error("Missing Groq Key!")
     else:
         try:
-            # Initialize LLM with the latest Llama 3.3 model
-            llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
+            # Use the Native CrewAI LLM wrapper to bypass OpenAI checks
+            my_llm = LLM(
+                model="groq/llama-3.3-70b-versatile",
+                api_key=groq_key
+            )
 
-            # 1. Define Agents (Memory set to False to avoid API errors)
+            # Researcher Agent
             researcher = Agent(
-                role='Research Analyst',
-                goal=f'Find 3 key facts about {topic}',
-                backstory="Expert researcher.",
-                tools=[search_tool],
-                llm=llm,
-                memory=False,
+                role='Researcher',
+                goal=f'Find 3 facts about {topic}',
+                backstory="You are a helpful research assistant.",
+                llm=my_llm,
+                tools=[InternetSearchTool().search],
+                allow_delegation=False,
                 verbose=True
             )
 
-            writer = Agent(
-                role='Technical Writer',
-                goal=f'Summarize the research on {topic}',
-                backstory="Executive summary expert.",
-                llm=llm,
-                memory=False,
-                verbose=True
-            )
-
-            # 2. Define Tasks
-            task1 = Task(
-                description=f"Research 3 major developments in {topic}.",
-                expected_output="3 detailed bullet points.",
+            # Simple Task
+            task = Task(
+                description=f"Summarize 3 key findings about {topic}.",
+                expected_output="A short bulleted list.",
                 agent=researcher
             )
 
-            task2 = Task(
-                description="Write a short Markdown report based on the research.",
-                expected_output="A 3-paragraph report.",
-                agent=writer
-            )
-
-            # 3. Assemble Crew (Memory set to False)
+            # Simple Crew (No Memory, No Manager)
             crew = Crew(
-                agents=[researcher, writer],
-                tasks=[task1, task2],
-                process=Process.sequential,
-                memory=False,
+                agents=[researcher],
+                tasks=[task],
                 verbose=True
             )
 
-            with st.status("🚀 Working...", expanded=True):
+            with st.spinner("Processing..."):
                 result = crew.kickoff()
-
-            st.subheader("📝 Final Report")
-            st.markdown(str(result))
-            
+                st.success("Done!")
+                st.markdown(str(result))
+                
         except Exception as e:
             st.error(f"Error: {str(e)}")
