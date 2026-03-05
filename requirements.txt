@@ -6,3 +6,4 @@ langchain-huggingface
 duckduckgo-search>=6.3.0
 sentence-transformers
 
+
