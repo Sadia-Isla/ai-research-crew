@@ -1,99 +1,89 @@
 import streamlit as st
-import os
 from crewai import Agent, Task, Crew, Process
-from crewai.tools import tool
-from langchain_groq import ChatGroq
-from duckduckgo_search import DDGS 
+from langchain_openai import ChatOpenAI
+from langchain_community.tools import DuckDuckGoSearchRun
+import os
 
-# --- CRITICAL: Bypass the OpenAI initialization check with a "valid-length" dummy key ---
-os.environ["OPENAI_API_KEY"] = "sk-111111111111111111111111111111111111111111111111"
+# 1. Setup Streamlit Page Configuration
+st.set_page_config(page_title="AI Research Crew", layout="wide")
 
-st.set_page_config(page_title="Reliable Research Crew", page_icon="🕵️‍♂️")
+st.title("🚀 AI Research Crew")
+st.markdown("Enter a topic below to have a specialized AI crew research and write a report for you.")
 
+# 2. Sidebar for Configuration (API Key handling)
 with st.sidebar:
-    st.title("🔑 API Settings")
-    groq_key = st.text_input("Enter Groq API Key", type="password")
-    if st.button("Reset Session"):
-        st.rerun()
+    st.header("Settings")
+    # Priority: Secrets (for live deployment) > User Input > Env Var
+    api_key = st.text_input("OpenAI API Key", type="password")
+    if not api_key:
+        api_key = os.getenv("OPENAI_API_KEY")
+    
+    if not api_key:
+        st.warning("Please provide an OpenAI API Key to proceed.")
+        st.stop()
 
-# --- Correct Tool Definition using @tool decorator ---
-@tool("internet_search")
-def internet_search(query: str):
-    """Search the internet for information on a given topic and return results."""
-    try:
-        with DDGS() as ddgs:
-            results = [r for r in ddgs.text(query, max_results=3)]
-            return str(results)
-    except Exception as e:
-        return f"Search error: {e}"
+# Initialize Search Tool
+search_tool = DuckDuckGoSearchRun()
 
-st.title("🕵️‍♂️ Multi-Agent Research System")
-topic = st.text_input("Research Topic", placeholder="e.g., Llama 3.3 release features")
+# 3. Define the Agents
+def create_research_crew(topic):
+    # LLM configuration
+    llm = ChatOpenAI(model_name="gpt-4-turbo", openai_api_key=api_key)
 
-if st.button("Start Research", type="primary"):
-    if not groq_key:
-        st.error("Please provide your Groq API Key!")
+    researcher = Agent(
+        role='Senior Research Analyst',
+        goal=f'Uncover cutting-edge developments in {topic}',
+        backstory="""You are an expert at identifying emerging trends and 
+        analyzing complex data. You provide structured and factual insights.""",
+        tools=[search_tool],
+        llm=llm,
+        verbose=True
+    )
+
+    writer = Agent(
+        role='Tech Content Strategist',
+        goal=f'Craft a compelling report on {topic}',
+        backstory="""You transform complex research into engaging, 
+        easy-to-read articles for a professional audience.""",
+        llm=llm,
+        verbose=True
+    )
+
+    # 4. Define the Tasks
+    research_task = Task(
+        description=f"Analyze the latest trends and breakthroughs in {topic}. Focus on 2024-2025 data.",
+        expected_output="A bullet-point summary of the top 5 key findings.",
+        agent=researcher
+    )
+
+    write_task = Task(
+        description=f"Using the research provided, write a 3-paragraph blog post about {topic}.",
+        expected_output="A full blog post in markdown format.",
+        agent=writer
+    )
+
+    # 5. Assemble the Crew
+    crew = Crew(
+        agents=[researcher, writer],
+        tasks=[research_task, write_task],
+        process=Process.sequential
+    )
+    
+    return crew
+
+# 6. UI Logic
+topic_input = st.text_input("What topic should we research today?", placeholder="e.g. Multi-agent AI systems")
+
+if st.button("Run Research Crew"):
+    if not topic_input:
+        st.error("Please enter a topic.")
     else:
-        try:
-            # 1. Initialize Groq LLM
-            llm = ChatGroq(
-                model="llama-3.3-70b-versatile", 
-                groq_api_key=groq_key,
-                temperature=0.7
-            )
+        with st.status("🤖 Crew is working...", expanded=True) as status:
+            st.write("Initializing agents...")
+            crew = create_research_crew(topic_input)
+            st.write("Researching and Writing...")
+            result = crew.kickoff()
+            status.update(label="Research Complete!", state="complete", expanded=False)
 
-            # 2. Define Agents
-            researcher = Agent(
-                role='Senior Research Analyst',
-                goal=f'Identify 3 key facts about {topic}',
-                backstory="Expert at finding accurate info quickly.",
-                tools=[internet_search], # Now correctly decorated
-                llm=llm,
-                memory=False,
-                verbose=True,
-                allow_delegation=False
-            )
-
-            writer = Agent(
-                role='Content Writer',
-                goal=f'Summarize the findings for {topic}',
-                backstory="Technical writer who makes things easy to read.",
-                llm=llm,
-                memory=False,
-                verbose=True,
-                allow_delegation=False
-            )
-
-            # 3. Define Tasks
-            task1 = Task(
-                description=f"Find 3 major developments regarding {topic}.",
-                expected_output="3 bullet points with facts.",
-                agent=researcher
-            )
-
-            task2 = Task(
-                description="Format the research into a short Markdown report.",
-                expected_output="A 2-paragraph report.",
-                agent=writer
-            )
-
-            # 4. Assemble and Run
-            crew = Crew(
-                agents=[researcher, writer],
-                tasks=[task1, task2],
-                process=Process.sequential,
-                memory=False,
-                verbose=True
-            )
-
-            with st.status("🔍 Researching...", expanded=True):
-                result = crew.kickoff()
-                st.success("Done!")
-
-            st.subheader("📝 Final Report")
-            st.markdown(str(result))
-            
-        except Exception as e:
-            st.error(f"Execution Error: {str(e)}")
-
-st.caption("Built with CrewAI and Groq (Llama 3.3)")
+        st.subheader("Final Report")
+        st.markdown(result)
