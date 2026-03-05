@@ -11,9 +11,9 @@ st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", 
 # --- Sidebar: Configuration ---
 with st.sidebar:
     st.title("🔑 API Settings")
+    # Removed OpenAI Key requirement
     groq_key = st.text_input("Enter Groq API Key", type="password")
-    openai_key = st.text_input("Enter OpenAI API Key", type="password")
-    st.info("Groq runs the Llama model. OpenAI handles Agent Memory.")
+    st.info("Now using Llama 3.3 (Groq) and local Hugging Face Memory (No OpenAI key needed).")
     st.markdown("---")
     if st.button("Reset Session"):
         st.rerun()
@@ -34,22 +34,19 @@ class InternetSearchTool(BaseTool):
 search_tool = InternetSearchTool()
 
 st.title("🕵️‍♂️ Multi-Agent Research System")
-st.markdown("Autonomous research pipeline powered by **Llama 3.1 (Groq)** and **OpenAI Memory**.")
+st.markdown("Autonomous research pipeline powered by **Llama 3.3 (Groq)** and **Local Memory**.")
 
 topic = st.text_input("Research Topic", placeholder="e.g., Next-gen Battery Technology 2026")
 
 if st.button("Start Research Pipeline", type="primary"):
-    if not groq_key or not openai_key:
-        st.error("Please provide both API Keys in the sidebar!")
+    if not groq_key:
+        st.error("Please provide your Groq API Key in the sidebar!")
     elif not topic:
         st.warning("Please enter a topic.")
     else:
         try:
-            # Set environment variable for CrewAI memory
-            os.environ["OPENAI_API_KEY"] = openai_key
-
-            # Initialize Groq LLM - Using llama-3.1-70b-versatile for stability
-            llm = ChatGroq(model="llama-3.1-70b-versatile", groq_api_key=groq_key)
+            # Initialize Groq LLM - Updated to Llama 3.3 for stability
+            llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
 
             # Define Agents
             researcher = Agent(
@@ -84,13 +81,20 @@ if st.button("Start Research Pipeline", type="primary"):
                 agent=writer
             )
 
-            # Assemble the Crew
+            # Assemble the Crew with LOCAL Memory configuration
             crew = Crew(
                 agents=[researcher, writer],
                 tasks=[research_task, write_task],
                 process=Process.sequential,
                 memory=True,
-                verbose=True
+                verbose=True,
+                # Use Hugging Face for free local embeddings instead of OpenAI
+                embedder={
+                    "provider": "huggingface",
+                    "config": {
+                        "model": "sentence-transformers/all-MiniLM-L6-v2"
+                    }
+                }
             )
 
             # Execution UI
@@ -114,4 +118,4 @@ if st.button("Start Research Pipeline", type="primary"):
             st.error(f"An error occurred: {str(e)}")
 
 st.markdown("---")
-st.caption("Built with CrewAI, Groq, and OpenAI.")
+st.caption("Built with CrewAI, Groq (Llama 3.3), and Local Hugging Face Embeddings.")
