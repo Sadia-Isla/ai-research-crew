@@ -1,8 +1,6 @@
 streamlit
 crewai
-langchain
-langchain-community
+langchain-core
 langchain-openai
 duckduckgo-search==6.2.13
 pydantic>=2.4.2
-
