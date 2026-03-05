@@ -2,69 +2,65 @@ import streamlit as st
 import os
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
+from langchain.tools import tool
 
-# Attempt to import the search tool safely
-try:
-    from langchain_community.tools import DuckDuckGoSearchRun
-    from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
-    HAS_SEARCH = True
-except ImportError:
-    HAS_SEARCH = False
+# --- 1. Custom Tool Definition (Bypasses the buggy wrapper) ---
+class SearchTools():
+    @tool("search_internet")
+    def search_internet(query: str):
+        """Search the internet about a given topic and return relevant results."""
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = [r for r in ddgs.text(query, max_results=5)]
+            return results
 
-st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️")
+# --- 2. Streamlit UI ---
+st.set_page_config(page_title="AI Research Crew", layout="wide")
+st.title("🚀 AI Research Crew")
 
-# --- UI Header ---
-st.title("🕵️‍♂️ AI Research Crew")
-
-# --- Sidebar Configuration ---
 with st.sidebar:
-    st.header("Configuration")
+    st.header("Setup")
     api_key = st.text_input("OpenAI API Key", type="password")
-    
-    if not HAS_SEARCH:
-        st.error("⚠️ 'duckduckgo-search' is not installed. Please add it to requirements.txt")
+    st.info("Ensure 'duckduckgo-search' is in your requirements.txt")
 
-# --- Main Logic ---
-topic = st.text_input("What do you want the AI to research?", placeholder="e.g. The future of Quantum Computing")
+topic = st.text_input("What would you like to research?")
 
-if st.button("Start Research"):
+# --- 3. Execution ---
+if st.button("Run Research"):
     if not api_key:
-        st.warning("Please enter your OpenAI API Key in the sidebar.")
-    elif not HAS_SEARCH:
-        st.error("App cannot run without search dependencies.")
-    elif topic:
+        st.error("Please provide an OpenAI API Key.")
+    elif not topic:
+        st.warning("Please enter a research topic.")
+    else:
         try:
-            # 1. Initialize Tools & LLM
-            wrapper = DuckDuckGoSearchAPIWrapper()
-            search_tool = DuckDuckGoSearchRun(api_wrapper=wrapper)
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
+            
+            # Initialize our custom tool
+            internet_search_tool = SearchTools.search_internet
 
-            # 2. Define Agent
             researcher = Agent(
-                role='Lead Researcher',
-                goal=f'Find the latest information about {topic}',
-                backstory="You are a meticulous researcher with a knack for finding hidden details.",
-                tools=[search_tool],
+                role='Senior Researcher',
+                goal=f'Find comprehensive info on {topic}',
+                backstory="Expert at sifting through internet noise to find facts.",
+                tools=[internet_search_tool],
                 llm=llm,
-                verbose=True
+                verbose=True,
+                allow_delegation=False
             )
 
-            # 3. Define Task
             task = Task(
-                description=f"Conduct a comprehensive search on {topic} and summarize key findings.",
-                expected_output="A detailed 4-paragraph report.",
+                description=f"Research {topic} and provide a summary of the latest 2025-2026 news.",
+                expected_output="A structured markdown report.",
                 agent=researcher
             )
 
-            # 4. Run Crew
             crew = Crew(agents=[researcher], tasks=[task], verbose=True)
-            
-            with st.spinner("Analyzing... this may take a minute."):
-                result = crew.kickoff()
-                st.success("Research Complete!")
-                st.markdown(result)
 
+            with st.spinner("Crew is searching..."):
+                result = crew.kickoff()
+                st.success("Done!")
+                st.markdown(result)
+                
         except Exception as e:
-            st.error(f"An error occurred during execution: {e}")
-    else:
-        st.info("Please enter a topic.")
+            st.error(f"Execution Error: {str(e)}")
+            st.info("Tip: If you see 'ddgs' errors, click 'Reboot App' in Streamlit Cloud.")
