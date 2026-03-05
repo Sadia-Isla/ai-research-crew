@@ -2,77 +2,77 @@ import streamlit as st
 import os
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
-# Fixed: Importing from langchain_core as it is already installed in your logs
 from langchain_core.tools import tool
 
-# --- 1. Custom Tool Definition ---
-class SearchTools():
-    @tool("search_internet")
-    def search_internet(query: str):
-        """Search the internet about a given topic and return relevant results."""
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            # Safely fetch results
-            results = [r for r in ddgs.text(query, max_results=5)]
-            return results
-
-# --- 2. Streamlit UI ---
+# 1. Page Config
 st.set_page_config(page_title="AI Research Crew", layout="wide")
 st.title("🚀 AI Research Crew")
 
+# 2. Sidebar Setup
 with st.sidebar:
-    st.header("Setup")
+    st.header("Settings")
+    # Priority: Streamlit Secrets > User Input
     api_key = st.text_input("OpenAI API Key", type="password")
-    st.info("Make sure 'langchain' and 'duckduckgo-search' are in requirements.txt")
-
-topic = st.text_input("What would you like to research?")
-
-# --- 3. Execution Logic ---
-if st.button("Run Research"):
     if not api_key:
-        st.error("Please provide an OpenAI API Key.")
+        api_key = st.secrets.get("OPENAI_API_KEY", "")
+    
+    if not api_key:
+        st.warning("Please enter an OpenAI API Key to start.")
+
+# 3. Custom Search Tool
+class SearchProvider:
+    @tool("internet_search")
+    def internet_search(query: str):
+        """Search the internet for the latest information on a topic."""
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = [r for r in ddgs.text(query, max_results=5)]
+            return str(results)
+
+# 4. Main App Logic
+topic = st.text_input("Enter a research topic:", placeholder="e.g., Future of Mars Colonization")
+
+if st.button("Start Research"):
+    if not api_key:
+        st.error("API Key is missing!")
     elif not topic:
-        st.warning("Please enter a research topic.")
+        st.error("Please enter a topic.")
     else:
         try:
-            # Initialize the LLM
+            # Initialize LLM
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
             
-            # Initialize our custom tool
-            internet_search_tool = SearchTools.search_internet
-
-            # Define Researcher Agent
+            # Define Agent
             researcher = Agent(
-                role='Senior Researcher',
-                goal=f'Find comprehensive and factual info on {topic}',
-                backstory="An expert analyst with a focus on 2025-2026 developments.",
-                tools=[internet_search_tool],
+                role='Lead Research Analyst',
+                goal=f'Provide a deep-dive report on {topic}',
+                backstory="You are an expert researcher known for finding factual, up-to-date data.",
+                tools=[SearchProvider.internet_search],
                 llm=llm,
-                verbose=True,
-                allow_delegation=False
-            )
-
-            # Define the Research Task
-            task = Task(
-                description=f"Analyze {topic}. Provide a deep dive into current trends and future outlook.",
-                expected_output="A well-formatted markdown report with bullet points.",
-                agent=researcher
-            )
-
-            # Assemble the Crew
-            crew = Crew(
-                agents=[researcher], 
-                tasks=[task], 
-                process=Process.sequential,
                 verbose=True
             )
 
-            with st.spinner("The Crew is researching... please wait."):
+            # Define Task
+            research_task = Task(
+                description=f"Research {topic}. Focus on major breakthroughs in 2025 and 2026.",
+                expected_output="A detailed markdown report with at least 3 sections.",
+                agent=researcher
+            )
+
+            # Run Crew
+            crew = Crew(
+                agents=[researcher],
+                tasks=[research_task],
+                verbose=True
+            )
+
+            with st.status("🤖 Crew is investigating...", expanded=True) as status:
                 result = crew.kickoff()
-                st.success("Research Complete!")
-                st.markdown("---")
-                st.markdown(result)
-                
+                status.update(label="Research Complete!", state="complete")
+
+            st.markdown("### Final Report")
+            st.markdown(result)
+
         except Exception as e:
-            st.error(f"Execution Error: {str(e)}")
-            st.info("Check your OpenAI API key and balance.")
+            st.error(f"An error occurred: {e}")
+            st.info("If this is a 'ModuleNotFoundError', please Reboot the app in Streamlit Cloud settings.")
