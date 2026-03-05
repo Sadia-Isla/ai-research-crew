@@ -11,23 +11,23 @@ st.title("🚀 AI Research Crew")
 # 2. Sidebar Setup
 with st.sidebar:
     st.header("Settings")
-    # Priority: Streamlit Secrets > User Input
     api_key = st.text_input("OpenAI API Key", type="password")
     if not api_key:
+        # Check Streamlit secrets if text input is empty
         api_key = st.secrets.get("OPENAI_API_KEY", "")
     
     if not api_key:
         st.warning("Please enter an OpenAI API Key to start.")
 
-# 3. Custom Search Tool
-class SearchProvider:
-    @tool("internet_search")
-    def internet_search(query: str):
-        """Search the internet for the latest information on a topic."""
-        from duckduckgo_search import DDGS
-        with DDGS() as ddgs:
-            results = [r for r in ddgs.text(query, max_results=5)]
-            return str(results)
+# 3. Robust Tool Definition
+@tool("internet_search")
+def internet_search(query: str):
+    """Search the internet for the latest information on a topic."""
+    from duckduckgo_search import DDGS
+    with DDGS() as ddgs:
+        # We convert the generator to a list to ensure it's serializable
+        results = [r for r in ddgs.text(query, max_results=5)]
+        return str(results)
 
 # 4. Main App Logic
 topic = st.text_input("Enter a research topic:", placeholder="e.g., Future of Mars Colonization")
@@ -42,14 +42,20 @@ if st.button("Start Research"):
             # Initialize LLM
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
             
+            # --- THE FIX IS HERE ---
+            # We pass the tool directly in a list. 
+            # CrewAI 1.x+ is strict about the tool being a valid BaseTool instance.
+            agent_tools = [internet_search]
+
             # Define Agent
             researcher = Agent(
                 role='Lead Research Analyst',
                 goal=f'Provide a deep-dive report on {topic}',
                 backstory="You are an expert researcher known for finding factual, up-to-date data.",
-                tools=[SearchProvider.internet_search],
+                tools=agent_tools, # Updated to use the validated list
                 llm=llm,
-                verbose=True
+                verbose=True,
+                allow_delegation=False
             )
 
             # Define Task
@@ -74,5 +80,7 @@ if st.button("Start Research"):
             st.markdown(result)
 
         except Exception as e:
+            # Enhanced error reporting for debugging
             st.error(f"An error occurred: {e}")
-            st.info("If this is a 'ModuleNotFoundError', please Reboot the app in Streamlit Cloud settings.")
+            if "validation error" in str(e).lower():
+                st.info("This is a Pydantic versioning conflict. Ensure your requirements.txt is updated.")
