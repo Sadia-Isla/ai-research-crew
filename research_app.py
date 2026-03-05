@@ -13,7 +13,7 @@ with st.sidebar:
     st.title("🔑 API Settings")
     groq_key = st.text_input("Enter Groq API Key", type="password")
     openai_key = st.text_input("Enter OpenAI API Key", type="password")
-    st.info("Groq runs the Llama 3.3 model. OpenAI handles Agent Memory.")
+    st.info("Groq runs the Llama model. OpenAI handles Agent Memory.")
     st.markdown("---")
     if st.button("Reset Session"):
         st.rerun()
@@ -34,7 +34,7 @@ class InternetSearchTool(BaseTool):
 search_tool = InternetSearchTool()
 
 st.title("🕵️‍♂️ Multi-Agent Research System")
-st.markdown("Autonomous research pipeline powered by **Llama 3.3 (Groq)** and **OpenAI Memory**.")
+st.markdown("Autonomous research pipeline powered by **Llama 3.1 (Groq)** and **OpenAI Memory**.")
 
 topic = st.text_input("Research Topic", placeholder="e.g., Next-gen Battery Technology 2026")
 
@@ -45,11 +45,11 @@ if st.button("Start Research Pipeline", type="primary"):
         st.warning("Please enter a topic.")
     else:
         try:
-            # Set the environment variable for CrewAI's internal memory
+            # Set environment variable for CrewAI memory
             os.environ["OPENAI_API_KEY"] = openai_key
 
-            # Initialize Groq LLM for the agents
-            llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
+            # Initialize Groq LLM - Using llama-3.1-70b-versatile for stability
+            llm = ChatGroq(model="llama-3.1-70b-versatile", groq_api_key=groq_key)
 
             # Define Agents
             researcher = Agent(
@@ -59,7 +59,7 @@ if st.button("Start Research Pipeline", type="primary"):
                 tools=[search_tool],
                 llm=llm,
                 verbose=True,
-                memory=True # Now enabled!
+                memory=True
             )
 
             writer = Agent(
@@ -68,7 +68,7 @@ if st.button("Start Research Pipeline", type="primary"):
                 backstory="Specialist in technical writing and executive summaries.",
                 llm=llm,
                 verbose=True,
-                memory=True # Now enabled!
+                memory=True
             )
 
             # Define Tasks
@@ -89,7 +89,7 @@ if st.button("Start Research Pipeline", type="primary"):
                 agents=[researcher, writer],
                 tasks=[research_task, write_task],
                 process=Process.sequential,
-                memory=True, # Uses OpenAI for vector embeddings
+                memory=True,
                 verbose=True
             )
 
