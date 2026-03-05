@@ -2,5 +2,7 @@ streamlit
 crewai>=0.100.0
 langchain-groq
 langchain-community
+langchain-huggingface
 duckduckgo-search>=6.3.0
 sentence-transformers
+
