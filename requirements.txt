@@ -1,7 +1,8 @@
 streamlit
-crewai
-langchain-openai
+crewai==0.28.8
+langchain
 langchain-community
+langchain-openai
 duckduckgo-search==6.2.13
 pydantic>=2.4.2
 
