@@ -1,67 +1,98 @@
 import streamlit as st
 import os
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, Task, Crew, Process
+from langchain_groq import ChatGroq
 from duckduckgo_search import DDGS 
 
-# 1. COMPLETELY WIPE the OpenAI key from the environment
-if "OPENAI_API_KEY" in os.environ:
-    del os.environ["OPENAI_API_KEY"]
+# --- CRITICAL: Bypass the OpenAI initialization check ---
+os.environ["OPENAI_API_KEY"] = "not-needed"
 
-st.set_page_config(page_title="Simplified Research", page_icon="🕵️‍♂️")
+st.set_page_config(page_title="Reliable Research Crew", page_icon="🕵️‍♂️")
 
 with st.sidebar:
-    st.title("🔑 Configuration")
+    st.title("🔑 API Settings")
     groq_key = st.text_input("Enter Groq API Key", type="password")
+    if st.button("Reset Session"):
+        st.rerun()
 
-# Custom Search Tool
-class InternetSearchTool:
-    def search(self, query: str):
+# --- Custom Search Tool (Simplified) ---
+def internet_search(query: str):
+    """Search the internet for info."""
+    try:
         with DDGS() as ddgs:
-            return str([r for r in ddgs.text(query, max_results=3)])
+            results = [r for r in ddgs.text(query, max_results=3)]
+            return str(results)
+    except Exception as e:
+        return f"Search error: {e}"
 
-st.title("🕵️‍♂️ Fast Research System")
-topic = st.text_input("Topic", placeholder="e.g. Llama 4 release date")
+st.title("🕵️‍♂️ Multi-Agent Research System")
+topic = st.text_input("Research Topic", placeholder="e.g., Llama 3.3 release features")
 
-if st.button("Run Research", type="primary"):
+if st.button("Start Research", type="primary"):
     if not groq_key:
-        st.error("Missing Groq Key!")
+        st.error("Please provide your Groq API Key!")
     else:
         try:
-            # Use the Native CrewAI LLM wrapper to bypass OpenAI checks
-            my_llm = LLM(
-                model="groq/llama-3.3-70b-versatile",
-                api_key=groq_key
+            # 1. Initialize Groq LLM via LangChain (Most stable for Streamlit)
+            llm = ChatGroq(
+                model="llama-3.3-70b-versatile", 
+                groq_api_key=groq_key,
+                temperature=0.7
             )
 
-            # Researcher Agent
+            # 2. Define Agents (Memory=False is key here)
             researcher = Agent(
-                role='Researcher',
-                goal=f'Find 3 facts about {topic}',
-                backstory="You are a helpful research assistant.",
-                llm=my_llm,
-                tools=[InternetSearchTool().search],
-                allow_delegation=False,
-                verbose=True
+                role='Senior Research Analyst',
+                goal=f'Identify 3 key facts about {topic}',
+                backstory="Expert at finding accurate info quickly.",
+                tools=[internet_search],
+                llm=llm,
+                memory=False,
+                verbose=True,
+                allow_delegation=False
             )
 
-            # Simple Task
-            task = Task(
-                description=f"Summarize 3 key findings about {topic}.",
-                expected_output="A short bulleted list.",
+            writer = Agent(
+                role='Content Writer',
+                goal=f'Summarize the findings for {topic}',
+                backstory="Technical writer who makes things easy to read.",
+                llm=llm,
+                memory=False,
+                verbose=True,
+                allow_delegation=False
+            )
+
+            # 3. Define Tasks
+            task1 = Task(
+                description=f"Find 3 major developments regarding {topic}.",
+                expected_output="3 bullet points with facts.",
                 agent=researcher
             )
 
-            # Simple Crew (No Memory, No Manager)
+            task2 = Task(
+                description="Format the research into a short Markdown report.",
+                expected_output="A 2-paragraph report.",
+                agent=writer
+            )
+
+            # 4. Assemble and Run
             crew = Crew(
-                agents=[researcher],
-                tasks=[task],
+                agents=[researcher, writer],
+                tasks=[task1, task2],
+                process=Process.sequential,
+                memory=False,  # DO NOT ENABLE THIS
                 verbose=True
             )
 
-            with st.spinner("Processing..."):
+            with st.status("🔍 Researching...", expanded=True):
                 result = crew.kickoff()
                 st.success("Done!")
-                st.markdown(str(result))
-                
+
+            st.subheader("📝 Final Report")
+            st.markdown(str(result))
+            
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Execution Error: {str(e)}")
+            st.info("Try running: pip install -U langchain-groq duckduckgo-search crewai")
+
+st.caption("Built with CrewAI and Groq (Llama 3.3)")
