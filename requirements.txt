@@ -2,5 +2,5 @@ streamlit
 crewai
 langchain-openai
 langchain-community
-duckduckgo-search
+duckduckgo-search==6.2.13
 
