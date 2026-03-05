@@ -1,20 +1,23 @@
 import streamlit as st
+import os
 from crewai import Agent, Task, Crew, Process
-from crewai_tools import ScrapeWebsiteTool, SerperDevTool
 from langchain_openai import ChatOpenAI
-from langchain.tools import tool
+from langchain_core.tools import tool
 
-# 1. App Configuration
-st.set_page_config(page_title="Multi-Agent AI Research", layout="wide")
-st.title("🤖 Multi-Agent Research Team")
+# 1. App UI Setup
+st.set_page_config(page_title="AI Multi-Agent Research", layout="wide")
+st.title("🤖 Multi-Agent Research Crew")
+st.markdown("This system uses a **Researcher** and a **Technical Writer** to collaborate on your topic.")
 
 with st.sidebar:
-    st.header("Authentication")
+    st.header("Configuration")
     api_key = st.text_input("OpenAI API Key", type="password")
-    st.info("This app uses GPT-4o and Multi-Agent orchestration (CrewAI) to conduct deep research.")
+    if not api_key:
+        api_key = st.secrets.get("OPENAI_API_KEY", "")
+    
+    st.info("Built with CrewAI & GPT-4o")
 
-# 2. Stable Search Tool Implementation
-# We use a simple @tool decorator which is highly stable for resumes
+# 2. Simple, Stable Search Tool
 @tool("internet_search")
 def internet_search(query: str):
     """Searches the internet for information on a given topic."""
@@ -23,65 +26,66 @@ def internet_search(query: str):
         results = [r for r in ddgs.text(query, max_results=3)]
         return str(results)
 
-# 3. Main Logic
-topic = st.text_input("Enter a complex topic for research:", placeholder="e.g., The impact of Quantum Computing on Cybersecurity")
+# 3. App Logic
+topic = st.text_input("What should the agents research?", placeholder="e.g. Next-gen battery technologies")
 
-if st.button("🚀 Start Multi-Agent Process"):
+if st.button("Run Multi-Agent Crew"):
     if not api_key:
-        st.warning("Please enter your OpenAI API Key in the sidebar.")
+        st.error("Please provide an OpenAI API Key.")
     elif topic:
         try:
-            # Initialize the LLM (GPT-4o is best for multi-agent reasoning)
+            # Initialize LLM
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
 
-            # --- AGENT 1: THE RESEARCHER ---
+            # Agent 1: The Specialist Researcher
             researcher = Agent(
-                role='Senior Research Lead',
-                goal=f'Uncover groundbreaking information about {topic}',
-                backstory="You are a world-class researcher. You excel at finding the latest news and verifying facts.",
+                role='Senior Research Analyst',
+                goal=f'Find the most recent breakthroughs in {topic}',
+                backstory="You are an expert at identifying emerging trends and verifying technical data.",
                 tools=[internet_search],
                 llm=llm,
                 verbose=True
             )
 
-            # --- AGENT 2: THE WRITER ---
+            # Agent 2: The Professional Writer
             writer = Agent(
                 role='Technical Content Strategist',
-                goal=f'Summarize the research into a professional report about {topic}',
-                backstory="You specialize in taking complex data and turning it into clear, executive summaries.",
+                goal=f'Create a high-level executive summary about {topic}',
+                backstory="You specialize in transforming complex research into clear, actionable reports.",
                 llm=llm,
                 verbose=True
             )
 
-            # --- DEFINE TASKS ---
+            # Task 1: Researching
             research_task = Task(
-                description=f"Research the top 3 latest breakthroughs in {topic}. Provide sources.",
-                expected_output="A list of 3 key findings with brief descriptions.",
+                description=f"Conduct deep research on {topic}. Identify 3 key 2025-2026 developments.",
+                expected_output="A list of key findings with supporting data.",
                 agent=researcher
             )
 
-            writing_task = Task(
-                description=f"Write a 3-paragraph executive summary based on the research. Use Markdown.",
-                expected_output="A professionally formatted report in Markdown.",
+            # Task 2: Writing (uses research from Task 1)
+            write_task = Task(
+                description=f"Use the researcher's findings to write a professional 3-paragraph report.",
+                expected_output="A markdown-formatted executive summary.",
                 agent=writer
             )
 
-            # --- ORCHESTRATE THE CREW ---
+            # Orchestrate the Crew
             crew = Crew(
                 agents=[researcher, writer],
-                tasks=[research_task, writing_task],
-                process=Process.sequential, # Researcher finishes, then Writer starts
+                tasks=[research_task, write_task],
+                process=Process.sequential,
                 verbose=True
             )
 
-            with st.spinner("Agents are collaborating... please wait."):
+            with st.status("👨‍💻 Agents are collaborating...", expanded=True) as status:
                 result = crew.kickoff()
-                st.success("Collaboration Successful!")
-                st.markdown("---")
-                st.subheader("Final Intelligence Report")
-                st.markdown(result)
+                status.update(label="Collaboration Complete!", state="complete")
+
+            st.subheader("Final Output")
+            st.markdown(result)
 
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"Error: {e}")
     else:
-        st.info("Provide a topic to begin.")
+        st.warning("Please enter a topic.")
