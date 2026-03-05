@@ -3,7 +3,12 @@ from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 from langchain_community.tools import DuckDuckGoSearchRun
 import os
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 
+# Use the wrapper to avoid initialization errors
+wrapper = DuckDuckGoSearchAPIWrapper()
+search_tool = DuckDuckGoSearchRun(api_wrapper=wrapper)
 # 1. Setup Streamlit Page Configuration
 st.set_page_config(page_title="AI Research Crew", layout="wide")
 
