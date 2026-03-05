@@ -1,9 +1,6 @@
 streamlit
-crewai>=0.100.0
-langchain-groq
+crewai
+langchain-openai
 langchain-community
-langchain-huggingface
-duckduckgo-search>=6.3.0
-sentence-transformers
-
+duckduckgo-search
 
