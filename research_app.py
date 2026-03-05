@@ -11,9 +11,8 @@ st.set_page_config(page_title="AI Research Crew", page_icon="🕵️‍♂️", 
 # --- Sidebar: Configuration ---
 with st.sidebar:
     st.title("🔑 API Settings")
-    # Removed OpenAI Key requirement
     groq_key = st.text_input("Enter Groq API Key", type="password")
-    st.info("Now using Llama 3.3 (Groq) and local Hugging Face Memory (No OpenAI key needed).")
+    st.info("Using Llama 3.3 (Groq) + Local HF Memory. No OpenAI key required.")
     st.markdown("---")
     if st.button("Reset Session"):
         st.rerun()
@@ -45,7 +44,10 @@ if st.button("Start Research Pipeline", type="primary"):
         st.warning("Please enter a topic.")
     else:
         try:
-            # Initialize Groq LLM - Updated to Llama 3.3 for stability
+            # IMPORTANT: Bypass CrewAI's default OpenAI credential check
+            os.environ["OPENAI_API_KEY"] = "NA" 
+
+            # Initialize Groq LLM - Updated to Llama 3.3 Successor
             llm = ChatGroq(model="llama-3.3-70b-versatile", groq_api_key=groq_key)
 
             # Define Agents
@@ -81,14 +83,14 @@ if st.button("Start Research Pipeline", type="primary"):
                 agent=writer
             )
 
-            # Assemble the Crew with LOCAL Memory configuration
+            # Assemble the Crew with Local Embedder configuration
             crew = Crew(
                 agents=[researcher, writer],
                 tasks=[research_task, write_task],
                 process=Process.sequential,
                 memory=True,
                 verbose=True,
-                # Use Hugging Face for free local embeddings instead of OpenAI
+                # Force Hugging Face provider for embeddings to avoid OpenAI calls
                 embedder={
                     "provider": "huggingface",
                     "config": {
@@ -115,7 +117,9 @@ if st.button("Start Research Pipeline", type="primary"):
             )
 
         except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+            # Handle potential litellm/crewai import errors
+            st.error(f"Execution Error: {str(e)}")
+            st.info("Check if 'langchain-huggingface' is installed in your requirements.")
 
 st.markdown("---")
 st.caption("Built with CrewAI, Groq (Llama 3.3), and Local Hugging Face Embeddings.")
