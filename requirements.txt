@@ -2,3 +2,4 @@ streamlit
 crewai
 langchain-openai
 duckduckgo-search==6.2.13
+fpdf
