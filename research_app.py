@@ -1,86 +1,87 @@
 import streamlit as st
-import os
 from crewai import Agent, Task, Crew, Process
+from crewai_tools import ScrapeWebsiteTool, SerperDevTool
 from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
+from langchain.tools import tool
 
-# 1. Page Config
-st.set_page_config(page_title="AI Research Crew", layout="wide")
-st.title("🚀 AI Research Crew")
+# 1. App Configuration
+st.set_page_config(page_title="Multi-Agent AI Research", layout="wide")
+st.title("🤖 Multi-Agent Research Team")
 
-# 2. Sidebar Setup
 with st.sidebar:
-    st.header("Settings")
+    st.header("Authentication")
     api_key = st.text_input("OpenAI API Key", type="password")
-    if not api_key:
-        # Check Streamlit secrets if text input is empty
-        api_key = st.secrets.get("OPENAI_API_KEY", "")
-    
-    if not api_key:
-        st.warning("Please enter an OpenAI API Key to start.")
+    st.info("This app uses GPT-4o and Multi-Agent orchestration (CrewAI) to conduct deep research.")
 
-# 3. Robust Tool Definition
+# 2. Stable Search Tool Implementation
+# We use a simple @tool decorator which is highly stable for resumes
 @tool("internet_search")
 def internet_search(query: str):
-    """Search the internet for the latest information on a topic."""
+    """Searches the internet for information on a given topic."""
     from duckduckgo_search import DDGS
     with DDGS() as ddgs:
-        # We convert the generator to a list to ensure it's serializable
-        results = [r for r in ddgs.text(query, max_results=5)]
+        results = [r for r in ddgs.text(query, max_results=3)]
         return str(results)
 
-# 4. Main App Logic
-topic = st.text_input("Enter a research topic:", placeholder="e.g., Future of Mars Colonization")
+# 3. Main Logic
+topic = st.text_input("Enter a complex topic for research:", placeholder="e.g., The impact of Quantum Computing on Cybersecurity")
 
-if st.button("Start Research"):
+if st.button("🚀 Start Multi-Agent Process"):
     if not api_key:
-        st.error("API Key is missing!")
-    elif not topic:
-        st.error("Please enter a topic.")
-    else:
+        st.warning("Please enter your OpenAI API Key in the sidebar.")
+    elif topic:
         try:
-            # Initialize LLM
+            # Initialize the LLM (GPT-4o is best for multi-agent reasoning)
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
-            
-            # --- THE FIX IS HERE ---
-            # We pass the tool directly in a list. 
-            # CrewAI 1.x+ is strict about the tool being a valid BaseTool instance.
-            agent_tools = [internet_search]
 
-            # Define Agent
+            # --- AGENT 1: THE RESEARCHER ---
             researcher = Agent(
-                role='Lead Research Analyst',
-                goal=f'Provide a deep-dive report on {topic}',
-                backstory="You are an expert researcher known for finding factual, up-to-date data.",
-                tools=agent_tools, # Updated to use the validated list
+                role='Senior Research Lead',
+                goal=f'Uncover groundbreaking information about {topic}',
+                backstory="You are a world-class researcher. You excel at finding the latest news and verifying facts.",
+                tools=[internet_search],
                 llm=llm,
-                verbose=True,
-                allow_delegation=False
-            )
-
-            # Define Task
-            research_task = Task(
-                description=f"Research {topic}. Focus on major breakthroughs in 2025 and 2026.",
-                expected_output="A detailed markdown report with at least 3 sections.",
-                agent=researcher
-            )
-
-            # Run Crew
-            crew = Crew(
-                agents=[researcher],
-                tasks=[research_task],
                 verbose=True
             )
 
-            with st.status("🤖 Crew is investigating...", expanded=True) as status:
-                result = crew.kickoff()
-                status.update(label="Research Complete!", state="complete")
+            # --- AGENT 2: THE WRITER ---
+            writer = Agent(
+                role='Technical Content Strategist',
+                goal=f'Summarize the research into a professional report about {topic}',
+                backstory="You specialize in taking complex data and turning it into clear, executive summaries.",
+                llm=llm,
+                verbose=True
+            )
 
-            st.markdown("### Final Report")
-            st.markdown(result)
+            # --- DEFINE TASKS ---
+            research_task = Task(
+                description=f"Research the top 3 latest breakthroughs in {topic}. Provide sources.",
+                expected_output="A list of 3 key findings with brief descriptions.",
+                agent=researcher
+            )
+
+            writing_task = Task(
+                description=f"Write a 3-paragraph executive summary based on the research. Use Markdown.",
+                expected_output="A professionally formatted report in Markdown.",
+                agent=writer
+            )
+
+            # --- ORCHESTRATE THE CREW ---
+            crew = Crew(
+                agents=[researcher, writer],
+                tasks=[research_task, writing_task],
+                process=Process.sequential, # Researcher finishes, then Writer starts
+                verbose=True
+            )
+
+            with st.spinner("Agents are collaborating... please wait."):
+                result = crew.kickoff()
+                st.success("Collaboration Successful!")
+                st.markdown("---")
+                st.subheader("Final Intelligence Report")
+                st.markdown(result)
 
         except Exception as e:
-            # Enhanced error reporting for debugging
-            st.error(f"An error occurred: {e}")
-            if "validation error" in str(e).lower():
-                st.info("This is a Pydantic versioning conflict. Ensure your requirements.txt is updated.")
+            st.error(f"Error: {str(e)}")
+    else:
+        st.info("Provide a topic to begin.")
