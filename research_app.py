@@ -1,88 +1,88 @@
 import streamlit as st
-import os
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool
+from crewai.tools import BaseTool
+from duckduckgo_search import DDGS
 
-# 1. App UI Setup
+# 1. Professional UI Setup
 st.set_page_config(page_title="AI Multi-Agent Research", layout="wide")
-st.title("🤖 Multi-Agent Research Crew")
-st.markdown("This system uses a **Researcher** and a **Technical Writer** to collaborate on your topic.")
+st.title("🤖 Multi-Agent Research Intelligence")
+st.markdown("A professional multi-agent system demonstrating **Sequential Task Delegation**.")
 
+# 2. Define a Stable Custom Tool (Pydantic-safe)
+class InternetSearchTool(BaseTool):
+    name: str = "internet_search"
+    description: str = "Searches the internet for the latest information on a given topic."
+
+    def _run(self, query: str) -> str:
+        with DDGS() as ddgs:
+            results = [r for r in ddgs.text(query, max_results=3)]
+            return str(results)
+
+# 3. Sidebar for API Keys
 with st.sidebar:
-    st.header("Configuration")
+    st.header("Authentication")
     api_key = st.text_input("OpenAI API Key", type="password")
     if not api_key:
         api_key = st.secrets.get("OPENAI_API_KEY", "")
-    
-    st.info("Built with CrewAI & GPT-4o")
 
-# 2. Simple, Stable Search Tool
-@tool("internet_search")
-def internet_search(query: str):
-    """Searches the internet for information on a given topic."""
-    from duckduckgo_search import DDGS
-    with DDGS() as ddgs:
-        results = [r for r in ddgs.text(query, max_results=3)]
-        return str(results)
+# 4. Main App Logic
+topic = st.text_input("Enter Research Topic:", placeholder="e.g., Sustainable Aviation Fuel trends 2026")
 
-# 3. App Logic
-topic = st.text_input("What should the agents research?", placeholder="e.g. Next-gen battery technologies")
-
-if st.button("Run Multi-Agent Crew"):
+if st.button("🚀 Run Multi-Agent Crew"):
     if not api_key:
         st.error("Please provide an OpenAI API Key.")
     elif topic:
         try:
             # Initialize LLM
             llm = ChatOpenAI(model="gpt-4o", openai_api_key=api_key)
+            search_tool = InternetSearchTool()
 
-            # Agent 1: The Specialist Researcher
+            # --- AGENT 1: THE RESEARCHER ---
             researcher = Agent(
-                role='Senior Research Analyst',
-                goal=f'Find the most recent breakthroughs in {topic}',
-                backstory="You are an expert at identifying emerging trends and verifying technical data.",
-                tools=[internet_search],
+                role='Lead Research Analyst',
+                goal=f'Identify 3 major breakthroughs in {topic}',
+                backstory="Expert at deep-web data retrieval and technical verification.",
+                tools=[search_tool],
                 llm=llm,
                 verbose=True
             )
 
-            # Agent 2: The Professional Writer
+            # --- AGENT 2: THE WRITER ---
             writer = Agent(
-                role='Technical Content Strategist',
-                goal=f'Create a high-level executive summary about {topic}',
-                backstory="You specialize in transforming complex research into clear, actionable reports.",
+                role='Technical Writer',
+                goal='Synthesize research into a professional executive summary',
+                backstory="Specializes in translating technical data for stakeholders.",
                 llm=llm,
                 verbose=True
             )
 
-            # Task 1: Researching
-            research_task = Task(
-                description=f"Conduct deep research on {topic}. Identify 3 key 2025-2026 developments.",
-                expected_output="A list of key findings with supporting data.",
+            # --- TASKS ---
+            task1 = Task(
+                description=f"Research the latest 2025-2026 news regarding {topic}.",
+                expected_output="A list of 3 key findings with details.",
                 agent=researcher
             )
 
-            # Task 2: Writing (uses research from Task 1)
-            write_task = Task(
-                description=f"Use the researcher's findings to write a professional 3-paragraph report.",
-                expected_output="A markdown-formatted executive summary.",
+            task2 = Task(
+                description="Write a 3-paragraph professional report based on the findings.",
+                expected_output="A markdown formatted report.",
                 agent=writer
             )
 
-            # Orchestrate the Crew
+            # --- EXECUTION ---
             crew = Crew(
                 agents=[researcher, writer],
-                tasks=[research_task, write_task],
+                tasks=[task1, task2],
                 process=Process.sequential,
                 verbose=True
             )
 
-            with st.status("👨‍💻 Agents are collaborating...", expanded=True) as status:
+            with st.status("👨‍💻 Agents collaborating...", expanded=True) as status:
                 result = crew.kickoff()
-                status.update(label="Collaboration Complete!", state="complete")
+                status.update(label="Analysis Complete!", state="complete")
 
-            st.subheader("Final Output")
+            st.subheader("Final Intelligence Report")
             st.markdown(result)
 
         except Exception as e:
